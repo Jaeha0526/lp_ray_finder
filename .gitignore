@@ -1,0 +1,31 @@
+# Large data files
+n6data/*.ine
+n6data/*.ext
+n6data/*.txt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+test_cone.*
+
+# Backup directory
+*_backup/
