@@ -11,19 +11,40 @@ This is an LP-based extreme ray finder for convex cones, specifically designed f
 ## Key Commands
 
 ### Environment Setup
+
+**Two GPU tracks exist and they use different libraries.** `requirements.txt`
+pins the **JAX** track (jax 0.4.30 + CUDA 12 wheels + scipy/numpy) — it does
+**not** install CuPy.
+
 ```bash
-# Activate virtual environment (if exists)
-source venv/bin/activate
+python -m venv venv && source venv/bin/activate   # venv/ is not checked in
+pip install -r requirements.txt                   # numpy, scipy, JAX + CUDA 12
 
-# Install core dependencies
-pip install numpy scipy
-
-# Install GPU acceleration (strongly recommended)
-pip install cupy-cuda11x  # or cupy-cuda12x based on CUDA version
-
-# Check CUDA version
-nvcc --version
+# The phase3 track additionally needs CuPy, which requirements.txt omits:
+pip install cupy-cuda12x   # or cupy-cuda11x, matching `nvcc --version`
 ```
+
+| Track | Files | GPU library |
+|---|---|---|
+| Phase 1-3 | `lp_ray_finder{,_phase2,_phase3}.py`, `phase3_no_limit.py`, `phase3_full_s7.py` | **CuPy** |
+| JAX | `lp_ray_finder_jax.py`, `find_extremal_rays_batch_jax.py` | **JAX** |
+
+### Input data is NOT in this repo
+
+Every production script reads an `.ine` constraint file — for the N=6 work,
+`n6data/n6_correct_s7_expansion.ine` (8.6M constraints). **No `.ine` file and no
+`n6data/` directory is checked in here.** Scripts carry hardcoded cluster paths
+such as `/workspace/lrslib-entropycone/n6data/...`; supply the file (from the
+lrslib/entropycone side) and fix the path before running anything.
+
+### Cluster (SLURM)
+
+```bash
+sbatch find_extremal_rays.sbatch   # JAX track, 1 GPU, 8 CPU, 32G, 24h, partition=gpu
+sbatch find_10k_rays.sbatch        # large batch search
+```
+Both create `logs/` and `results/` on start. Module loads are commented out —
+uncomment and adjust per cluster.
 
 ### Running the Ray Finder
 ```bash
@@ -51,9 +72,9 @@ python convert_to_integer_rays.py
 # Extract integer coordinates from existing rays
 python extract_integer_coordinates.py
 
-# Check if discovered rays are truly new
-python check_against_known_rays.py
 ```
+(There is no `check_against_known_rays.py`; uniqueness is checked with the S7
+signature comparison shown under "Verifying Ray Uniqueness" below.)
 
 ## Architecture
 
@@ -75,8 +96,8 @@ The system uses an **active-set Linear Programming approach with extremality ver
   - `find_extreme_ray_active_set()`: May need extremality verification added
 
 ### Data Files
-- **Input**: `n6data/n6_correct_s7_expansion.ine` - 8.6M constraints defining N=6 cone
-- **Results**: 
+- **Input**: `n6data/n6_correct_s7_expansion.ine` - 8.6M constraints defining N=6 cone. **Supplied externally — not in this repo** (see Environment Setup).
+- **Results** (checked in): 
   - `truly_new_rays_final.txt` - **NOTE: These were found to NOT be true extreme rays**
   - `all_unique_rays_integer.txt` - Integer coordinate representations (not verified as extreme)
   - Various orbit representative files for S7 symmetry analysis
@@ -147,7 +168,27 @@ def get_ray_signature(ray):
 - Use `use_gpu=False` for CPU fallback
 - Monitor with `nvidia-smi`
 
+### `ModuleNotFoundError: cupy`
+Expected on a `requirements.txt`-only install — that file pins the JAX track.
+Either `pip install cupy-cuda12x`, or use the JAX scripts instead.
+
+### FileNotFoundError on a `.ine` path
+The constraint file is not in this repo and several scripts hardcode
+`/workspace/lrslib-entropycone/n6data/...`. Point them at your local copy.
+
 ### Performance
 - Ensure GPU is detected (check startup messages)
 - Increase subset_size to reduce iterations but slower LP solves
 - Use phase3_no_limit.py for production searches
+## Other scripts in this directory
+
+Not part of the documented 3-phase path, kept from the search campaign:
+`lp_ray_finder_correct.py`, `find_more_rays.py`, `find_positive_rays.py`,
+`find_rays_active_set_s7.py`, `find_rays_with_full_s7.py`,
+`use_phase3_with_s7.py`, `phase3_full_s7.py`.
+
+The many `*_REPORT.md` / `*_SUMMARY.md` files at the repo root are a historical
+record of the search, written at different times and **not all mutually
+consistent** — several predate the extremality fix described above. Trust this
+file and the code over them; where they conflict about whether rays are extreme,
+the extremality-verification caveat wins.
